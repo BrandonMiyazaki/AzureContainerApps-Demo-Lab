@@ -1,0 +1,71 @@
+@page "/products"
+@using Frontend.Services
+@inject OrdersApiClient Api
+@rendermode InteractiveServer
+
+<PageTitle>Products — Miyazaki Retail</PageTitle>
+
+<h1>Products</h1>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-4">
+        @foreach (var product in _products)
+        {
+            <div class="col-md-4 col-lg-3">
+                <div class="card h-100 @(product.StockQuantity < 10 ? "border-danger" : "")">
+                    <div class="card-body">
+                        <h5 class="card-title">@product.Name</h5>
+                        <span class="badge bg-secondary mb-2">@product.Category</span>
+                        <p class="card-text fs-5 fw-bold">@product.Price.ToString("C")</p>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between align-items-center">
+                        <span>Stock: @product.StockQuantity</span>
+                        @if (product.StockQuantity < 10)
+                        {
+                            <span class="badge bg-danger">Low Stock</span>
+                        }
+                        else if (product.StockQuantity < 50)
+                        {
+                            <span class="badge bg-warning text-dark">Limited</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">In Stock</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<Frontend.Models.Product> _products = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _products = await Api.GetProductsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load products: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

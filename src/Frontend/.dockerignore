@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/.git
+**/.vs
+**/.vscode
+**/*.user
+**/*.suo
+**/Thumbs.db
+**/Desktop.ini
+**/.DS_Store
+Dockerfile
+.dockerignore

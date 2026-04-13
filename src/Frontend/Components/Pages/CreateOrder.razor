@@ -1,0 +1,248 @@
+@page "/orders/create"
+@using Frontend.Services
+@using Frontend.Models
+@inject OrdersApiClient Api
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Create Order</PageTitle>
+
+<h1>Create Order</h1>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row">
+        <div class="col-lg-8">
+            @* Customer selection *@
+            <div class="mb-3">
+                <label class="form-label fw-bold">Customer</label>
+                <input type="text" class="form-control" placeholder="Search customers..."
+                       @bind="_customerSearch" @bind:event="oninput" />
+                @if (_selectedCustomer is null)
+                {
+                    <div class="list-group mt-1" style="max-height: 200px; overflow-y: auto;">
+                        @foreach (var c in FilteredCustomers.Take(10))
+                        {
+                            <button type="button" class="list-group-item list-group-item-action"
+                                    @onclick="() => SelectCustomer(c)">
+                                @c.FirstName @c.LastName — @c.Email
+                            </button>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info mt-1 d-flex justify-content-between align-items-center mb-0 py-2">
+                        <span><strong>@_selectedCustomer.FirstName @_selectedCustomer.LastName</strong> — @_selectedCustomer.Email (@_selectedCustomer.City, @_selectedCustomer.State)</span>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ClearCustomer">Change</button>
+                    </div>
+                }
+            </div>
+
+            @* Product selection *@
+            <div class="mb-3">
+                <label class="form-label fw-bold">Add Products</label>
+                <input type="text" class="form-control" placeholder="Search products..."
+                       @bind="_productSearch" @bind:event="oninput" />
+                <div class="list-group mt-1" style="max-height: 200px; overflow-y: auto;">
+                    @foreach (var p in FilteredProducts.Take(15))
+                    {
+                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between"
+                                @onclick="() => AddProduct(p)">
+                            <span>@p.Name <span class="badge bg-secondary">@p.Category</span></span>
+                            <span class="fw-bold">@p.Price.ToString("C")</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @* Order items *@
+            @if (_orderItems.Count > 0)
+            {
+                <h5>Order Items</h5>
+                <table class="table table-striped">
+                    <thead>
+                        <tr><th>Product</th><th>Unit Price</th><th style="width: 120px;">Qty</th><th>Subtotal</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _orderItems)
+                        {
+                            <tr>
+                                <td>@item.ProductName</td>
+                                <td>@item.UnitPrice.ToString("C")</td>
+                                <td>
+                                    <input type="number" class="form-control form-control-sm" min="1" max="99"
+                                           @bind="item.Quantity" @bind:event="oninput" />
+                                </td>
+                                <td>@((item.Quantity * item.UnitPrice).ToString("C"))</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveItem(item)">✕</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold">Total</td>
+                            <td class="fw-bold">@OrderTotal.ToString("C")</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            }
+
+            @* Submit *@
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-primary" @onclick="SubmitOrder"
+                        disabled="@(!CanSubmit || _submitting)">
+                    @if (_submitting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    Place Order
+                </button>
+                <a href="orders" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+
+            @if (_successMessage is not null)
+            {
+                <div class="alert alert-success mt-3">@_successMessage</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private bool _submitting;
+    private string? _successMessage;
+
+    private List<Customer> _customers = [];
+    private List<Product> _products = [];
+    private string _customerSearch = string.Empty;
+    private string _productSearch = string.Empty;
+    private Customer? _selectedCustomer;
+    private List<OrderLineItem> _orderItems = [];
+
+    private bool CanSubmit => _selectedCustomer is not null && _orderItems.Count > 0;
+    private decimal OrderTotal => _orderItems.Sum(i => i.Quantity * i.UnitPrice);
+
+    private IEnumerable<Customer> FilteredCustomers =>
+        string.IsNullOrWhiteSpace(_customerSearch)
+            ? _customers
+            : _customers.Where(c =>
+                $"{c.FirstName} {c.LastName}".Contains(_customerSearch, StringComparison.OrdinalIgnoreCase) ||
+                c.Email.Contains(_customerSearch, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<Product> FilteredProducts
+    {
+        get
+        {
+            var addedIds = _orderItems.Select(i => i.ProductId).ToHashSet();
+            var available = _products.Where(p => !addedIds.Contains(p.Id));
+            return string.IsNullOrWhiteSpace(_productSearch)
+                ? available
+                : available.Where(p =>
+                    p.Name.Contains(_productSearch, StringComparison.OrdinalIgnoreCase) ||
+                    p.Category.Contains(_productSearch, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var customersTask = Api.GetCustomersAsync();
+            var productsTask = Api.GetProductsAsync();
+            await Task.WhenAll(customersTask, productsTask);
+            _customers = customersTask.Result;
+            _products = productsTask.Result;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load data: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SelectCustomer(Customer c)
+    {
+        _selectedCustomer = c;
+        _customerSearch = string.Empty;
+    }
+
+    private void ClearCustomer()
+    {
+        _selectedCustomer = null;
+        _customerSearch = string.Empty;
+    }
+
+    private void AddProduct(Product p)
+    {
+        _orderItems.Add(new OrderLineItem
+        {
+            ProductId = p.Id,
+            ProductName = p.Name,
+            UnitPrice = p.Price,
+            Quantity = 1
+        });
+        _productSearch = string.Empty;
+    }
+
+    private void RemoveItem(OrderLineItem item) => _orderItems.Remove(item);
+
+    private async Task SubmitOrder()
+    {
+        if (!CanSubmit) return;
+        _submitting = true;
+        _successMessage = null;
+        _error = null;
+
+        try
+        {
+            var request = new CreateOrderRequest
+            {
+                CustomerId = _selectedCustomer!.Id,
+                Items = _orderItems.Select(i => new CreateOrderItemRequest
+                {
+                    ProductId = i.ProductId,
+                    Quantity = i.Quantity,
+                    UnitPrice = i.UnitPrice
+                }).ToList()
+            };
+
+            var created = await Api.CreateOrderAsync(request);
+            _successMessage = $"Order #{created?.Id} created successfully — {OrderTotal:C}";
+            _orderItems.Clear();
+            _selectedCustomer = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to create order: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private class OrderLineItem
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public decimal UnitPrice { get; set; }
+        public int Quantity { get; set; } = 1;
+    }
+}

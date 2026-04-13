@@ -1,0 +1,112 @@
+@page "/"
+@using Frontend.Services
+@inject OrdersApiClient Api
+@rendermode InteractiveServer
+
+<PageTitle>Dashboard — Miyazaki Retail</PageTitle>
+
+<h1>Dashboard</h1>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card text-bg-primary">
+                <div class="card-body">
+                    <h5 class="card-title">Total Orders</h5>
+                    <p class="card-text display-6">@_totalOrders</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-success">
+                <div class="card-body">
+                    <h5 class="card-title">Revenue</h5>
+                    <p class="card-text display-6">@_totalRevenue.ToString("C")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-info">
+                <div class="card-body">
+                    <h5 class="card-title">Active Customers</h5>
+                    <p class="card-text display-6">@_activeCustomers</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-bg-warning">
+                <div class="card-body">
+                    <h5 class="card-title">Low Stock Items</h5>
+                    <p class="card-text display-6">@_lowStockCount</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h4>Recent Orders</h4>
+    <table class="table table-striped">
+        <thead>
+            <tr><th>Order #</th><th>Customer</th><th>Date</th><th>Total</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var order in _recentOrders)
+            {
+                <tr>
+                    <td>@order.Id</td>
+                    <td>@(order.Customer is not null ? $"{order.Customer.FirstName} {order.Customer.LastName}" : "—")</td>
+                    <td>@order.OrderDate.ToString("g")</td>
+                    <td>@order.TotalAmount.ToString("C")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private int _totalOrders;
+    private decimal _totalRevenue;
+    private int _activeCustomers;
+    private int _lowStockCount;
+    private List<Frontend.Models.Order> _recentOrders = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var ordersTask = Api.GetOrdersAsync();
+            var customersTask = Api.GetCustomersAsync();
+            var productsTask = Api.GetProductsAsync();
+
+            await Task.WhenAll(ordersTask, customersTask, productsTask);
+
+            var orders = ordersTask.Result;
+            var customers = customersTask.Result;
+            var products = productsTask.Result;
+
+            _totalOrders = orders.Count;
+            _totalRevenue = orders.Sum(o => o.TotalAmount);
+            _activeCustomers = customers.Count;
+            _lowStockCount = products.Count(p => p.StockQuantity < 10);
+            _recentOrders = orders.Take(10).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load dashboard data: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

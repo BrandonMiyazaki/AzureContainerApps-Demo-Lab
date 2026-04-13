@@ -1,0 +1,118 @@
+name: Build and Deploy to ACA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'infra/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  ACR_NAME: ${{ vars.ACR_NAME }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-push:
+    name: Build, Scan & Push Images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: orders-api
+            context: src/OrdersApi
+          - service: frontend
+            context: src/Frontend
+          - service: data-generator
+            context: src/DataGenerator
+          - service: inventory-service
+            context: src/InventoryService
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build image with ACR
+        run: |
+          az acr build \
+            --registry ${{ env.ACR_NAME }} \
+            --image ${{ matrix.service }}:${{ env.IMAGE_TAG }} \
+            --image ${{ matrix.service }}:latest \
+            ${{ matrix.context }}
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.ACR_NAME }}.azurecr.io/${{ matrix.service }}:${{ env.IMAGE_TAG }}'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+  deploy:
+    name: Deploy to ACA
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy OrdersApi
+        run: |
+          az containerapp update \
+            --name ca-orders-api \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/orders-api:${{ env.IMAGE_TAG }}
+
+      - name: Deploy Frontend
+        run: |
+          az containerapp update \
+            --name ca-frontend \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/frontend:${{ env.IMAGE_TAG }}
+
+      - name: Deploy DataGenerator
+        run: |
+          az containerapp update \
+            --name ca-data-generator \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/data-generator:${{ env.IMAGE_TAG }}
+
+      - name: Deploy InventoryService
+        run: |
+          az containerapp update \
+            --name ca-inventory-service \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/inventory-service:${{ env.IMAGE_TAG }}
+
+      - name: Verify deployments
+        run: |
+          echo "=== Deployment Status ==="
+          for app in ca-orders-api ca-frontend ca-data-generator ca-inventory-service; do
+            echo "--- $app ---"
+            az containerapp show \
+              --name $app \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --query "{name:name, status:properties.provisioningState, image:properties.template.containers[0].image}" \
+              --output table
+          done

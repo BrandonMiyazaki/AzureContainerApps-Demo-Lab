@@ -1,0 +1,51 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "${SA_PASSWORD}"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${SA_PASSWORD}" -Q "SELECT 1" -C -b
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  orders-api:
+    build: src/OrdersApi
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__RetailDb: "Server=sqlserver;Database=RetailDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
+    ports:
+      - "5000:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  frontend:
+    build: src/Frontend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      API_BASE_URL: "http://orders-api:8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - orders-api
+
+  data-generator:
+    build: src/DataGenerator
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      API_BASE_URL: "http://orders-api:8080"
+    depends_on:
+      - orders-api
+
+  inventory-service:
+    build: src/InventoryService
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      API_BASE_URL: "http://orders-api:8080"
+    depends_on:
+      - orders-api

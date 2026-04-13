@@ -1,0 +1,87 @@
+# =========================
+# .NET / C#
+# =========================
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.userosscache
+*.suo
+*.cache
+*.log
+*.vspscc
+*.vssscc
+*.pidb
+*.svclog
+*.scc
+*.pdb
+*.dll
+*.exe
+
+# NuGet
+**/packages/
+*.nupkg
+**/project.lock.json
+**/project.fragment.lock.json
+*artifacts/
+
+# Visual Studio
+.vs/
+*.csproj.user
+
+# =========================
+# Docker
+# =========================
+**/docker-compose.override.yml
+
+# =========================
+# Azure / Bicep
+# =========================
+*.tfstate
+*.tfstate.backup
+.terraform/
+.azure/
+
+# =========================
+# IDE / Editors
+# =========================
+.idea/
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# =========================
+# Secrets / Environment
+# =========================
+appsettings.Production.json
+.env
+*.pfx
+*.key
+*.pem
+
+# =========================
+# Generated / Exported Files
+# =========================
+# Compiled ARM template from Bicep (regenerate with `az bicep build`)
+infra/main.json
+
+# Internal planning notes
+plan.md
+
+# Azure resource exports / scratch files
+dg-current.json
+data-generator-update.yaml

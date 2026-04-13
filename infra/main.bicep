@@ -24,6 +24,12 @@ param sqlSkuCapacity int = 5
 @description('Container image tag')
 param imageTag string = 'latest'
 
+@description('Object ID of the deploying user — run: az ad signed-in-user show --query id -o tsv')
+param sqlAdminObjectId string
+
+@description('Login name (email/UPN) of the deploying user — run: az ad signed-in-user show --query userPrincipalName -o tsv')
+param sqlAdminLogin string
+
 // 1. Managed Identity (created first — referenced by SQL, ACR, Key Vault)
 module identity 'modules/identity.bicep' = {
   name: 'identity'
@@ -65,6 +71,8 @@ module sql 'modules/sql.bicep' = {
     sqlDnsZoneId: networking.outputs.sqlDnsZoneId
     managedIdentityPrincipalId: identity.outputs.identityPrincipalId
     managedIdentityName: identity.outputs.identityName
+    sqlAdminObjectId: sqlAdminObjectId
+    sqlAdminLogin: sqlAdminLogin
     logAnalyticsWorkspaceId: logAnalyticsAca.outputs.logAnalyticsWorkspaceId
     skuName: sqlSkuName
     skuCapacity: sqlSkuCapacity

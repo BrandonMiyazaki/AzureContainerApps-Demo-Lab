@@ -11,3 +11,9 @@ param privateEndpointsSubnetPrefix = '10.31.2.0/24'
 // SQL — scale up for production
 param sqlSkuName = 'Basic'
 param sqlSkuCapacity = 5
+
+// SQL Entra admin — run these commands to get your values:
+//   az ad signed-in-user show --query id -o tsv
+//   az ad signed-in-user show --query userPrincipalName -o tsv
+param sqlAdminObjectId = '<your-entra-object-id>'
+param sqlAdminLogin = '<your-email-or-upn>'

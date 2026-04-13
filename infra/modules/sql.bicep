@@ -16,6 +16,12 @@ param managedIdentityPrincipalId string
 @description('Name of the managed identity for Entra admin')
 param managedIdentityName string
 
+@description('Object ID of the deploying user (Entra admin for SQL Server)')
+param sqlAdminObjectId string
+
+@description('Login name of the deploying user (email or UPN)')
+param sqlAdminLogin string
+
 @description('Log Analytics workspace ID for diagnostics')
 param logAnalyticsWorkspaceId string
 
@@ -34,9 +40,9 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
     administrators: {
       administratorType: 'ActiveDirectory'
       azureADOnlyAuthentication: true
-      login: managedIdentityName
-      sid: managedIdentityPrincipalId
-      principalType: 'Application'
+      login: sqlAdminLogin
+      sid: sqlAdminObjectId
+      principalType: 'User'
       tenantId: tenant().tenantId
     }
   }

@@ -58,6 +58,23 @@ param baseName = 'contoso-retail'          // A unique name (lowercase, hyphens 
 
 > **The `baseName` matters!** It's used to name all your Azure resources (e.g., `sql-contoso-retail`, `acrcontosoretail`). ACR names must be globally unique and alphanumeric only — the Bicep template strips hyphens automatically.
 
+Now set yourself as the SQL Server admin. Run these commands to get your Entra ID details:
+
+```bash
+# Get your Object ID
+az ad signed-in-user show --query id -o tsv
+
+# Get your UPN (email)
+az ad signed-in-user show --query userPrincipalName -o tsv
+```
+
+Paste the values into `main.bicepparam`:
+
+```
+param sqlAdminObjectId = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'   // Your Object ID
+param sqlAdminLogin = 'you@yourdomain.com'                         // Your UPN
+```
+
 ## Step 4: Deploy the infrastructure
 
 This creates all the Azure resources using the Bicep templates:
@@ -129,7 +146,89 @@ Now that the images are pushed, disable public access on ACR. The container apps
 az acr update --name $ACR_NAME --public-network-enabled false
 ```
 
-## Step 8: Get your app URL
+## Step 8: Grant the managed identity database access
+
+Your user account is the SQL Server admin, but the container apps run as a **managed identity**. You need to grant that identity read/write access to the database.
+
+First, get the managed identity name:
+
+```bash
+MI_NAME=$(az deployment group show \
+  --resource-group rg-retail-demo \
+  --name main \
+  --query "properties.outputs.identityClientId.value" -o tsv)
+
+echo "Managed Identity Client ID: $MI_NAME"
+```
+
+Now temporarily enable public access on SQL Server so you can connect:
+
+```bash
+SQL_SERVER=$(az deployment group show \
+  --resource-group rg-retail-demo \
+  --name main \
+  --query "properties.outputs.sqlServerFqdn.value" -o tsv)
+
+# Allow Azure services to connect
+az sql server update \
+  --name sql-$(az deployment group show --resource-group rg-retail-demo --name main --query "properties.outputs.sqlServerFqdn.value" -o tsv | cut -d. -f1 | sed 's/sql-//') \
+  --resource-group rg-retail-demo \
+  --enable-public-network true
+
+az sql server firewall-rule create \
+  --resource-group rg-retail-demo \
+  --server $(az sql server list --resource-group rg-retail-demo --query "[0].name" -o tsv) \
+  --name AllowAzureServices \
+  --start-ip-address 0.0.0.0 \
+  --end-ip-address 0.0.0.0
+```
+
+Connect to the database using the Azure CLI and run the SQL grant commands. Replace `<identity-name>` with the managed identity name (it follows the pattern `id-<baseName>`, e.g., `id-contoso-retail`):
+
+```bash
+# Get the identity name
+IDENTITY_NAME=$(az identity list \
+  --resource-group rg-retail-demo \
+  --query "[0].name" -o tsv)
+
+echo "Identity name: $IDENTITY_NAME"
+
+# Connect and grant permissions
+SQL_SERVER_NAME=$(az sql server list \
+  --resource-group rg-retail-demo \
+  --query "[0].name" -o tsv)
+
+az sql db execute \
+  --resource-group rg-retail-demo \
+  --server-name $SQL_SERVER_NAME \
+  --database-name RetailDb \
+  --query-text "
+    IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$IDENTITY_NAME')
+    BEGIN
+      CREATE USER [$IDENTITY_NAME] FROM EXTERNAL PROVIDER;
+    END;
+    ALTER ROLE db_datareader ADD MEMBER [$IDENTITY_NAME];
+    ALTER ROLE db_datawriter ADD MEMBER [$IDENTITY_NAME];
+  "
+```
+
+> **What this does:** Creates a database user for the managed identity and grants it `db_datareader` (SELECT) and `db_datawriter` (INSERT, UPDATE, DELETE) permissions. The container apps use this identity to authenticate to SQL — no passwords needed.
+
+Finally, lock down SQL Server public access again:
+
+```bash
+az sql server update \
+  --name $SQL_SERVER_NAME \
+  --resource-group rg-retail-demo \
+  --enable-public-network false
+
+az sql server firewall-rule delete \
+  --resource-group rg-retail-demo \
+  --server $SQL_SERVER_NAME \
+  --name AllowAzureServices
+```
+
+## Step 9: Get your app URL
 
 ```bash
 az deployment group show \
@@ -142,7 +241,7 @@ Open the URL in your browser (add `https://` in front). You should see the same 
 
 > **Give it a minute.** The Data Generator runs a bulk seed on first startup — it creates 500 customers and 10,000 orders with dates spanning 10 years. This takes a few minutes to complete.
 
-## Step 9: Verify everything is running
+## Step 10: Verify everything is running
 
 ```bash
 # Check all container apps

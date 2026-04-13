@@ -1,4 +1,4 @@
-# Miyazaki Retail — Azure Container Apps Demo Lab
+# Miyazaki Retail — Azure Container Apps Data Generator
 
 > **Disclaimer:** This repository is provided as-is for learning purposes and is not actively maintained. Dependencies, Azure services, and APIs may change over time. Use at your own discretion.
 
@@ -6,15 +6,55 @@ A hands-on lab for building and deploying a multi-service retail application on 
 
 ## Architecture
 
-```
-Browser → Blazor Frontend (external ingress on ACA)
-              ↓
-         Orders API (internal ingress)
-              ↓
-         Azure SQL (private endpoint)
-              ↑
-         Inventory Service (polls Orders API)
-         Data Generator (posts fake data to Orders API)
+```mermaid
+graph TB
+    subgraph Internet
+        Browser["🌐 Browser"]
+    end
+
+    subgraph Azure["Azure Resource Group"]
+        subgraph VNet["VNet (10.31.0.0/16)"]
+            subgraph ACA["snet-aca (10.31.0.0/23) — Container Apps Environment"]
+                Frontend["Blazor Frontend\n(external ingress)"]
+                API["Orders API\n(internal ingress)"]
+                DG["Data Generator\n(no ingress)"]
+                IS["Inventory Service\n(no ingress)"]
+            end
+
+            subgraph PE["snet-private-endpoints (10.31.2.0/24)"]
+                SQL_PE["SQL Private\nEndpoint"]
+                ACR_PE["ACR Private\nEndpoint"]
+                KV_PE["Key Vault Private\nEndpoint"]
+            end
+        end
+
+        SQL[("Azure SQL\nDatabase")]
+        ACR["Azure Container\nRegistry"]
+        KV["Azure Key Vault"]
+        MI["Managed Identity\n(Entra ID)"]
+        LA["Log Analytics"]
+    end
+
+    Browser -->|HTTPS| Frontend
+    Frontend -->|HTTP internal| API
+    DG -->|HTTP internal| API
+    IS -->|HTTP internal| API
+    API --> SQL_PE --> SQL
+    ACA -.->|image pull| ACR_PE --> ACR
+    ACA -.->|secrets| KV_PE --> KV
+    MI -.->|auth| SQL
+    MI -.->|auth| ACR
+    MI -.->|auth| KV
+    LA -.->|diagnostics| SQL
+    LA -.->|diagnostics| KV
+
+    style Internet fill:#e1f5fe,stroke:#0288d1
+    style VNet fill:#e8f5e9,stroke:#388e3c
+    style ACA fill:#fff3e0,stroke:#f57c00
+    style PE fill:#fce4ec,stroke:#c62828
+    style SQL fill:#e8eaf6,stroke:#3f51b5
+    style ACR fill:#e8eaf6,stroke:#3f51b5
+    style KV fill:#e8eaf6,stroke:#3f51b5
 ```
 
 ## Services

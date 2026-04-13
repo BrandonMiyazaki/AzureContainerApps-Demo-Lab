@@ -1,516 +1,381 @@
-# Miyazaki Retail — Lab Instructions
+# Azure Container Apps Demo Lab — Step-by-Step Instructions
 
-Step-by-step instructions for building and deploying the Miyazaki Retail application on Azure Container Apps.
+Welcome! This guide walks you through running the Miyazaki Retail application — first on your own machine, then deployed to Azure. No prior experience with containers is needed. We'll explain every step.
 
-> **Before you begin:** Make sure you have all [prerequisites](README.md#prerequisites) installed.
-
----
-
-## Phase 1 — Orders API
-
-Build the core Web API that all other services depend on.
-
-### 1.1 Create the project
-
-```bash
-mkdir -p src/OrdersApi
-cd src/OrdersApi
-dotnet new webapi -n OrdersApi
-cd OrdersApi
-```
-
-### 1.2 Add NuGet packages
-
-```bash
-dotnet add package Microsoft.EntityFrameworkCore.SqlServer
-dotnet add package Microsoft.EntityFrameworkCore.Design
-dotnet add package Azure.Identity
-```
-
-### 1.3 Define entity models
-
-Create the following models in a `Models/` folder:
-
-- **Customer** — Id, FirstName, LastName, Email, City, State, CreatedAt
-- **Product** — Id, Name, Category, Price, StockQuantity, CreatedAt
-- **Order** — Id, CustomerId, OrderDate, TotalAmount, Customer (nav), OrderItems (nav)
-- **OrderItem** — Id, OrderId, ProductId, Quantity, UnitPrice, Order (nav), Product (nav)
-
-### 1.4 Create the DbContext
-
-Create `Data/RetailDbContext.cs`:
-- Register `DbSet<>` for each entity
-- Add seed data in `OnModelCreating` using `HasData` for base Products (with initial stock quantities) and Customers
-
-### 1.5 Create the initial migration
-
-```bash
-dotnet ef migrations add InitialCreate
-```
-
-### 1.6 Implement API endpoints
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/customers` | List all customers |
-| POST | `/api/customers` | Create a customer |
-| GET | `/api/products` | List all products |
-| POST | `/api/products` | Create a product |
-| PUT | `/api/products/{id}/stock` | Update stock quantity (for Inventory Service) |
-| GET | `/api/orders` | List orders (supports `?since={timestamp}` filter) |
-| POST | `/api/orders` | Create an order with line items |
-| GET | `/healthz` | Health check |
-
-### 1.7 Configure SQL connection
-
-In `Program.cs`, set up dual connection modes:
-
-- **Local dev:** Read connection string from `appsettings.Development.json` (SQL auth for the local SQL container)
-- **Azure:** Use `Azure.Identity` + `DefaultAzureCredential` for managed identity auth (no passwords)
-
-### 1.8 Validate
-
-```bash
-dotnet run
-# Test endpoints with curl, Postman, or the Swagger UI
-```
+> **What you'll build:** A multi-service retail app with a web dashboard, a REST API, a fake-data generator, and an inventory tracker — all running in containers.
 
 ---
 
-## Phase 2 — Blazor Frontend
+## What are containers?
 
-Build the retail dashboard UI.
+A **container** is a lightweight, portable package that bundles your application code along with everything it needs to run (runtime, libraries, config). Think of it like a shipping container — it works the same way no matter where you run it (your laptop, a server, the cloud).
 
-### 2.1 Create the project
+**Docker** is the tool that builds and runs containers. **Docker Compose** lets you run multiple containers together (like our 4 services + a database) with a single command.
 
-```bash
-cd src
-dotnet new blazor --interactivity Server -n Frontend
-```
-
-### 2.2 Add a typed HttpClient
-
-Register a typed `HttpClient` in `Program.cs` for calling the Orders API. The base URL should be configurable via the `API_BASE_URL` environment variable.
-
-### 2.3 Build pages
-
-| Page | Description |
-|------|-------------|
-| **Dashboard** | Summary cards — total orders, revenue, active customers, low-stock count |
-| **Orders** | Table of recent orders with search/filter, click-through to order detail |
-| **Products** | Product catalog grid with stock levels (read from Orders API product data) |
-| **Customers** | Customer list with order history |
-
-### 2.4 Add security headers
-
-- Enable anti-forgery token protection
-- Add Content Security Policy (CSP) headers
-
-### 2.5 Add health check
-
-Add a `/healthz` endpoint for container orchestrator probes.
-
-### 2.6 Validate
-
-```bash
-# Start the Orders API first, then:
-cd src/Frontend
-API_BASE_URL=http://localhost:5000 dotnet run
-# Open browser and verify pages render with data
-```
+**Azure Container Apps (ACA)** is a managed cloud service that runs your containers in Azure without you having to manage servers.
 
 ---
 
-## Phase 3 — Data Generator
+## Prerequisites
 
-Build the synthetic data generator.
+Install these before starting:
 
-### 3.1 Create the project
+| Tool | What it does | Install link |
+|------|-------------|-------------|
+| **.NET SDK 9.0+** | Builds and runs the C# projects | [Download](https://dotnet.microsoft.com/download) |
+| **Docker Desktop** | Runs containers on your machine | [Download](https://www.docker.com/products/docker-desktop) |
+| **Azure CLI** | Manages Azure resources from the command line | [Download](https://learn.microsoft.com/cli/azure/install-azure-cli) |
+| **Git** | Clones the repo | [Download](https://git-scm.com/downloads) |
 
-```bash
-cd src
-dotnet new worker -n DataGenerator
-cd DataGenerator
-dotnet add package Bogus
-```
+You'll also need:
+- A free [Azure account](https://azure.microsoft.com/free/)
+- A code editor (we recommend [VS Code](https://code.visualstudio.com/))
 
-### 3.2 Define Bogus fakers
+### Verify your tools
 
-Create faker classes for:
-- `CustomerFaker` — realistic names, emails, cities
-- `ProductFaker` — product names, categories, prices
-- `OrderFaker` — random orders referencing existing customers and products
-
-### 3.3 Implement the BackgroundService
-
-- Run on a configurable timer interval
-- POST Customers and Products first, then create Orders referencing them
-- Make batch size and timer interval configurable via `appsettings.json`
-
-### 3.4 Configure
-
-Set `API_BASE_URL` to point to the Orders API (default: `http://localhost:5000`).
-
-### 3.5 Validate
+Open a terminal and run these commands. Each should print a version number:
 
 ```bash
-# With the Orders API running:
-cd src/DataGenerator
-dotnet run
-# Verify data appears in the API / database
+dotnet --version      # Should show 9.x or higher
+docker --version      # Should show Docker version 2x.x
+az --version          # Should show azure-cli 2.x
+git --version         # Should show git version 2.x
 ```
+
+> **Troubleshooting:** If any command says "not found", revisit the install link above. On Windows, you may need to restart your terminal after installing.
 
 ---
 
-## Phase 4 — Inventory Service
+## Phase 1 — Run Locally with Docker Compose
 
-Build the stock tracking service.
+This is the fastest way to see the full app running. Docker Compose will start a SQL Server database, the Orders API, the Frontend, and both worker services — all with one command.
 
-### 4.1 Create the project
-
-```bash
-cd src
-dotnet new worker -n InventoryService
-```
-
-### 4.2 Implement the polling BackgroundService
-
-- On each interval, call `GET /api/orders?since={lastChecked}` to detect new orders
-- Maintain an in-memory stock ledger per product
-- Decrement stock when new orders are detected
-- Call `PUT /api/products/{id}/stock` on the Orders API to persist updated levels
-- Log warnings when a product drops below a configurable low-stock threshold
-
-### 4.3 Add a debug endpoint
-
-Expose an internal `/api/inventory` endpoint (minimal API) to view current stock state during development.
-
-### 4.4 Validate
+### Step 1: Clone the repository
 
 ```bash
-# With the Orders API and Data Generator running:
-cd src/InventoryService
-dotnet run
-# Verify stock levels decrement as orders arrive
+git clone https://github.com/<your-username>/AzureContainerApps-Retail-Example.git
+cd AzureContainerApps-Retail-Example
 ```
 
----
+### Step 2: Create your environment file
 
-## Phase 5 — Dockerize & Test Locally
-
-Containerize all services and validate the full flow.
-
-### 5.1 Write Dockerfiles
-
-Create a `Dockerfile` in each service folder (`src/OrdersApi/`, `src/Frontend/`, `src/DataGenerator/`, `src/InventoryService/`). Use multi-stage builds:
-
-```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-COPY . .
-RUN dotnet publish -c Release -o /app
-
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
-WORKDIR /app
-COPY --from=build /app .
-ENTRYPOINT ["dotnet", "<ProjectName>.dll"]
-```
-
-> **Note:** Use `mcr.microsoft.com/dotnet/runtime:10.0` as the base image for the worker services (DataGenerator, InventoryService) instead of `aspnet` — unless they expose HTTP endpoints.
-
-### 5.2 Create docker-compose.yml
-
-Create a `.env` file by copying the template (this file is git-ignored):
+The app needs a SQL Server password. We provide a template — you just need to copy it:
 
 ```bash
+# On Mac/Linux:
 cp .env.example .env
-# Edit .env and set your SA_PASSWORD
+
+# On Windows (Command Prompt):
+copy .env.example .env
+
+# On Windows (PowerShell):
+Copy-Item .env.example .env
 ```
 
-Create `docker-compose.yml` in the repo root:
+Open `.env` in your editor. You'll see:
 
-```yaml
-services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      SA_PASSWORD: "${SA_PASSWORD}"
-      ACCEPT_EULA: "Y"
-    ports:
-      - "1433:1433"
-    healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${SA_PASSWORD}" -Q "SELECT 1" -C -b
-      interval: 10s
-      retries: 5
-
-  orders-api:
-    build: src/OrdersApi
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__RetailDb: "Server=sqlserver;Database=RetailDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True"
-    ports:
-      - "5000:8080"
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-
-  frontend:
-    build: src/Frontend
-    environment:
-      API_BASE_URL: "http://orders-api:8080"
-    ports:
-      - "8080:8080"
-    depends_on:
-      - orders-api
-
-  data-generator:
-    build: src/DataGenerator
-    environment:
-      API_BASE_URL: "http://orders-api:8080"
-    depends_on:
-      - orders-api
-
-  inventory-service:
-    build: src/InventoryService
-    environment:
-      API_BASE_URL: "http://orders-api:8080"
-    depends_on:
-      - orders-api
+```
+SA_PASSWORD=YourStr0ngP@ssword!
 ```
 
-### 5.3 Run and validate
+You can leave the default or change it. The password must meet [SQL Server complexity requirements](https://learn.microsoft.com/en-us/sql/relational-databases/security/password-policy) (8+ characters, uppercase, lowercase, number, special character).
+
+> **Important:** The `.env` file is git-ignored — it will **never** be committed to your repo. This is intentional for security.
+
+### Step 3: Make sure Docker Desktop is running
+
+Look for the Docker whale icon in your system tray (Windows) or menu bar (Mac). If it's not there, open Docker Desktop and wait for it to say "Docker is running."
+
+> **First time?** Docker Desktop may take a minute to start. On Windows, it may ask you to enable WSL 2 — follow the prompts.
+
+### Step 4: Start everything
+
+From the repo root folder, run:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-Open `http://localhost:8080` in your browser. Verify:
-- [ ] Frontend loads and shows the dashboard
-- [ ] Data Generator is creating orders (check Orders page)
-- [ ] Product stock levels are decrementing (check Products page)
+**What's happening:**
+1. Docker reads the `docker-compose.yml` file
+2. It **builds** a container image for each service (Orders API, Frontend, Data Generator, Inventory Service) using their `Dockerfile`
+3. It **pulls** a SQL Server image from Microsoft's container registry
+4. It starts all 5 containers and connects them on a private network
+5. The Orders API waits for SQL Server to be healthy, then runs database migrations (creates tables and seed data)
+6. The Data Generator starts creating fake customers and orders
+7. The Inventory Service starts tracking stock levels
+
+> **First run takes 2-5 minutes** — it needs to download base images (~500 MB) and build the projects. Subsequent runs are much faster because Docker caches the layers.
+
+You'll see logs scrolling from all services. Look for:
+- `Orders API is ready` — the API started successfully
+- `Data Generator starting` — fake data generation is running
+- `Inventory Service starting` — stock tracking is active
+
+### Step 5: Open the app
+
+Open your browser and go to: **http://localhost:8080**
+
+You should see the retail dashboard with:
+- **Dashboard** — summary cards (orders, revenue, customers, low-stock items)
+- **Orders** — click any order to see its line items
+- **Products** — product catalog with stock levels
+- **Customers** — click any customer to expand their order history
+- **New Order** — create an order manually
+
+> **Not loading?** Wait 30 seconds — the Data Generator needs time to create initial data. Refresh the page.
+
+### Step 6: Stop everything
+
+Press `Ctrl+C` in the terminal where Docker Compose is running. Then clean up:
+
+```bash
+docker compose down
+```
+
+This stops and removes the containers. Your source code is untouched.
+
+> **Want a fresh start?** Run `docker compose down -v` to also remove the database volume. Next time you start up, the database will be re-created from scratch.
 
 ---
 
-## Phase 6 — Azure Infrastructure (Bicep)
+## Phase 2 — Understand the Project Structure
 
-Provision all Azure resources with a secure, private architecture.
-
-### 6.1 Create the infra folder structure
+Before deploying to Azure, let's understand what we're working with:
 
 ```
-infra/
-├── main.bicep
-├── main.bicepparam
-└── modules/
-    ├── networking.bicep
-    ├── sql.bicep
-    ├── acr.bicep
-    ├── keyvault.bicep
-    ├── loganalytics-aca.bicep
-    └── identity.bicep
+├── src/
+│   ├── OrdersApi/          # REST API — connects to SQL, serves data
+│   │   └── Dockerfile      # Instructions to build this service's container
+│   ├── Frontend/           # Blazor web dashboard — calls the Orders API
+│   │   └── Dockerfile
+│   ├── DataGenerator/      # Background worker — creates fake data
+│   │   └── Dockerfile
+│   └── InventoryService/   # Background worker — tracks stock levels
+│       └── Dockerfile
+├── infra/                  # Bicep files — defines Azure infrastructure
+│   ├── main.bicep          # Orchestrates all modules
+│   ├── main.bicepparam     # Your deployment parameters (region, names)
+│   └── modules/            # One file per Azure resource type
+├── docker-compose.yml      # Runs everything locally
+├── .env.example            # Template for local passwords
+└── .github/workflows/      # CI/CD pipeline (optional)
 ```
 
-### 6.2 Networking module
+**Key concept — each service is independent:**
+- Each has its own `Dockerfile` (build instructions)
+- They communicate over HTTP (the API URL is configured via environment variables)
+- In Docker Compose, they share a private network
+- In Azure, they'll share a Container Apps Environment
 
-Provision:
-- **VNet** with two subnets:
-  - `snet-aca` — delegated to `Microsoft.App/environments`
-  - `snet-private-endpoints` — for private endpoints
-- **Private DNS zones:**
-  - `privatelink.database.windows.net`
-  - `privatelink.azurecr.io`
-  - `privatelink.vaultcore.azure.net`
-- Link each private DNS zone to the VNet
+---
 
-### 6.3 Azure SQL module
+## Phase 3 — Deploy to Azure
 
-- Azure SQL Server with **Entra ID-only authentication** (no SQL admin password)
-- Set the User-Assigned Managed Identity as the Entra admin
-- Create a database with an appropriate SKU
-- **Private endpoint** on `snet-private-endpoints` with DNS zone group for `privatelink.database.windows.net`
-- Set `publicNetworkAccess: 'Disabled'`
+Now let's run the same app in the cloud. We'll use **Azure Container Apps** — a managed service that runs containers without you managing any servers.
 
-### 6.4 ACR module
+### What gets created in Azure
 
-- Azure Container Registry — **Premium** SKU (required for private endpoint)
-- **Private endpoint** on `snet-private-endpoints` with DNS zone group for `privatelink.azurecr.io`
-- Disable public network access
-- Assign `AcrPull` role to the managed identity
+The Bicep templates in `infra/` will create:
 
-### 6.5 Key Vault module
+| Resource | Purpose |
+|----------|---------|
+| **Virtual Network (VNet)** | Private network for all resources |
+| **Azure SQL Database** | Stores customers, products, orders |
+| **Azure Container Registry (ACR)** | Stores your container images (like a private Docker Hub) |
+| **Azure Key Vault** | Stores secrets and configuration |
+| **Container Apps Environment** | Runs your 4 container apps |
+| **Managed Identity** | Allows apps to authenticate to Azure services without passwords |
+| **Log Analytics** | Collects logs and metrics |
 
-- Key Vault with **RBAC authorization** (not access policies)
-- **Private endpoint** on `snet-private-endpoints` with DNS zone group for `privatelink.vaultcore.azure.net`
-- Disable public network access
-- Assign `Key Vault Secrets User` role to the managed identity
-- Store non-identity config as secrets (API URLs, feature flags)
-
-### 6.6 Log Analytics + ACA Environment module
-
-- Log Analytics Workspace
-- Container Apps Environment deployed into `snet-aca` (VNet-integrated)
-- Internal-only environment — individual apps control their own ingress visibility
-
-### 6.7 Managed Identity module
-
-- User-Assigned Managed Identity
-- Role assignments:
-  - `AcrPull` on the ACR
-  - `Key Vault Secrets User` on the Key Vault
-  - Entra admin on the SQL Server
-
-### 6.8 Orchestrate and deploy
+### Step 1: Log in to Azure
 
 ```bash
-# Preview the deployment
-az deployment group create \
-  --resource-group <rg-name> \
-  --template-file infra/main.bicep \
-  --parameters infra/main.bicepparam \
-  --what-if
+az login
+```
 
-# Deploy for real
+This opens a browser window. Sign in with your Azure account. Then verify:
+
+```bash
+az account show --query "{name:name, id:id}" -o table
+```
+
+You should see your subscription name and ID. If you have multiple subscriptions, select the right one:
+
+```bash
+az account set --subscription "<subscription-name-or-id>"
+```
+
+### Step 2: Create a resource group
+
+A resource group is a container that holds related Azure resources. All our stuff goes here.
+
+```bash
+# Pick a name and region — these are examples
+az group create --name rg-retail-demo --location westus2
+```
+
+> **Choosing a region:** Pick one close to you for lower latency. Common choices: `westus2`, `eastus`, `eastus2`, `centralus`. Run `az account list-locations -o table` to see all options.
+
+### Step 3: Configure your deployment parameters
+
+Open `infra/main.bicepparam` in your editor. Fill in the placeholder values:
+
+```
+param location = 'westus2'                // The region you chose above
+param baseName = 'contoso-retail'          // A unique name (lowercase, hyphens OK)
+```
+
+> **The `baseName` matters!** It's used to name all your Azure resources (e.g., `sql-contoso-retail`, `acr-contoso-retail`). ACR names must be globally unique and alphanumeric only — the Bicep template strips hyphens automatically.
+
+### Step 4: Deploy the infrastructure
+
+This creates all the Azure resources using the Bicep templates:
+
+```bash
 az deployment group create \
-  --resource-group <rg-name> \
+  --resource-group rg-retail-demo \
   --template-file infra/main.bicep \
   --parameters infra/main.bicepparam
 ```
 
----
+> **This takes 10-15 minutes.** It's creating a VNet, SQL Server, Container Registry, Key Vault, Log Analytics, the Container Apps Environment, and the 4 container apps. The container apps will fail initially because we haven't pushed any images yet — that's expected.
 
-## Phase 7 — Deploy to ACA
-
-Push container images and deploy to Azure Container Apps.
-
-### 7.1 Build and push images
+You can watch progress in a separate terminal:
 
 ```bash
-ACR_NAME=<your-acr-name>
+az deployment group list \
+  --resource-group rg-retail-demo \
+  --query "[].{name:name, state:properties.provisioningState}" \
+  -o table
+```
 
+### Step 5: Build and push container images
+
+The container images need to be stored in your Azure Container Registry (ACR) before the container apps can run them.
+
+First, temporarily enable public access on ACR (it's locked down by default):
+
+```bash
+# Get your ACR name from the deployment output
+ACR_NAME=$(az deployment group show \
+  --resource-group rg-retail-demo \
+  --name main \
+  --query "properties.outputs.acrName.value" -o tsv)
+
+echo "Your ACR name is: $ACR_NAME"
+
+# Enable public access so we can push images
+az acr update --name $ACR_NAME --public-network-enabled true
+```
+
+Now build and push all 4 images. `az acr build` uploads your source code to Azure and builds the container image there — you don't need Docker running locally for this step:
+
+```bash
 az acr build --registry $ACR_NAME --image orders-api:latest src/OrdersApi/
 az acr build --registry $ACR_NAME --image frontend:latest src/Frontend/
 az acr build --registry $ACR_NAME --image data-generator:latest src/DataGenerator/
 az acr build --registry $ACR_NAME --image inventory-service:latest src/InventoryService/
 ```
 
-> **Note:** `az acr build` runs remotely inside ACR — no need for local Docker. If ACR has public access disabled, run from a build agent or jumpbox with VNet access.
+> **Each build takes ~1 minute.** You'll see build logs streaming in your terminal. Look for "Run ID: xxx was successful" at the end.
 
-### 7.2 Deploy container apps
+### Step 6: Redeploy to start the container apps
 
-Deploy each container app with the following configuration:
+Now that the images exist in ACR, redeploy the Bicep template. This time the container apps will start successfully:
 
-| App | Ingress | Scaling | Notes |
-|-----|---------|---------|-------|
-| **OrdersApi** | Internal only | KEDA HTTP (concurrent requests) | Managed identity for SQL auth via `DefaultAzureCredential` |
-| **Frontend** | External | KEDA HTTP (concurrent requests) | `API_BASE_URL` → OrdersApi internal FQDN. Publicly accessible via ACA FQDN. |
-| **DataGenerator** | None | Min: 1, Max: 1 | `API_BASE_URL` → OrdersApi internal FQDN |
-| **InventoryService** | None | Min: 1, Max: 1 | `API_BASE_URL` → OrdersApi internal FQDN |
-
-All apps should be assigned the same **User-Assigned Managed Identity**.
-
-### 7.3 Configure secrets
-
-Use Key Vault secret references for non-identity config (API URLs, feature flags). SQL auth is handled by managed identity — no connection string secret needed.
-
-### 7.4 End-to-end validation
-
-Test the full flow:
-
-```
-Browser → Frontend (external ACA FQDN) → OrdersApi (internal) → Azure SQL (private endpoint)
-                                                                    ↑
-                                          InventoryService (polling) ┘
+```bash
+az deployment group create \
+  --resource-group rg-retail-demo \
+  --template-file infra/main.bicep \
+  --parameters infra/main.bicepparam
 ```
 
-- [ ] Open the Frontend ACA URL in a browser — Frontend should load
-- [ ] Verify the Data Generator is creating data (check the Orders page)
-- [ ] Verify stock levels are updating (check the Products page)
-- [ ] Check container logs: `az containerapp logs show --name <app> --resource-group <rg>`
+### Step 7: Lock down ACR
+
+Now that the images are pushed, disable public access on ACR. The container apps pull images through the private endpoint inside the VNet:
+
+```bash
+az acr update --name $ACR_NAME --public-network-enabled false
+```
+
+### Step 8: Get your app URL
+
+```bash
+az deployment group show \
+  --resource-group rg-retail-demo \
+  --name main \
+  --query "properties.outputs.frontendFqdn.value" -o tsv
+```
+
+Open the URL in your browser (add `https://` in front). You should see the same retail dashboard, now running in Azure!
+
+> **Give it a minute.** The Data Generator runs a bulk seed on first startup — it creates 500 customers and 10,000 orders with dates spanning 10 years. This takes a few minutes to complete.
+
+### Step 9: Verify everything is running
+
+```bash
+# Check all container apps
+az containerapp list \
+  --resource-group rg-retail-demo \
+  --query "[].{name:name, status:properties.provisioningState}" \
+  -o table
+
+# Check logs for a specific app
+az containerapp logs show \
+  --name ca-data-generator \
+  --resource-group rg-retail-demo \
+  --follow
+```
 
 ---
 
-## Phase 8 — Fabric + Power BI
+## Clean Up
 
-Connect Microsoft Fabric to Azure SQL and build reports.
+When you're done, delete the resource group to avoid charges:
 
-### 8.1 Set up Fabric workspace
+```bash
+az group delete --name rg-retail-demo --yes --no-wait
+```
 
-Create a Microsoft Fabric workspace (or use an existing one with sufficient capacity).
-
-### 8.2 Configure managed private endpoint
-
-1. In the Fabric workspace, create a **managed private endpoint** targeting the Azure SQL Server
-2. Go to the Azure Portal → Azure SQL Server → Networking → Private endpoint connections
-3. **Approve** the pending private endpoint connection from Fabric
-4. No public firewall rules are needed
-
-### 8.3 Set up Fabric Mirroring
-
-1. In the Fabric workspace, create a **mirrored database**
-2. Connect to Azure SQL using the managed private endpoint
-3. Select the tables to replicate: Customers, Products, Orders, OrderItems
-4. Verify data is syncing in near-real-time
-
-### 8.4 Build the semantic model
-
-Create a Power BI semantic model (dataset) on top of the mirrored data:
-
-- **Relationships:**
-  - Order → OrderItem (one-to-many)
-  - OrderItem → Product (many-to-one)
-  - Order → Customer (many-to-one)
-- **Measures:**
-  - Total Revenue = `SUM(OrderItem[Quantity] * OrderItem[UnitPrice])`
-  - Order Count = `COUNTROWS(Orders)`
-  - Avg Order Value = `[Total Revenue] / [Order Count]`
-  - Stock Level = `SUM(Product[StockQuantity])`
-
-### 8.5 Build the Power BI report
-
-Create a report with four pages:
-
-| Page | Content |
-|------|---------|
-| **Sales Overview** | Revenue over time, order counts, average order value |
-| **Product Performance** | Top sellers, revenue by category, stock levels |
-| **Customer Insights** | Customer count growth, repeat buyers, geographic breakdown |
-| **Operations / Inventory** | Current stock, low-stock alerts, order fulfillment rate |
-
-### 8.6 Publish
-
-Publish the report to the Fabric workspace.
+This deletes **everything** in the resource group (VNet, SQL, ACR, Key Vault, all container apps). The `--no-wait` flag returns immediately — deletion happens in the background.
 
 ---
 
-## Phase 9 — CI/CD (Stretch)
+## Troubleshooting
 
-Automate build and deployment with GitHub Actions.
+### Docker Compose won't start
 
-### 9.1 Create the workflow
+| Problem | Solution |
+|---------|----------|
+| "Docker daemon is not running" | Open Docker Desktop and wait for it to start |
+| "port 1433 already in use" | Another SQL Server is running. Stop it or change the port in `docker-compose.yml` |
+| "password validation failed" | Your `SA_PASSWORD` in `.env` doesn't meet complexity requirements |
+| Build fails with "SDK not found" | Make sure you're using the correct .NET SDK version (check `Dockerfile` for the version) |
 
-Create `.github/workflows/build-deploy.yml`:
+### Azure deployment issues
 
-- **Trigger:** On push to `main`
-- **Jobs:**
-  1. Build Docker images for all four services
-  2. Push to ACR
-  3. Deploy updated container revisions to ACA via `az containerapp update`
+| Problem | Solution |
+|---------|----------|
+| "container app failed to provision" | Images don't exist in ACR yet. Push images (Step 5) then redeploy (Step 6) |
+| "ACR access denied during build" | ACR public access may not have propagated yet. Wait 30 seconds and retry |
+| "SQL connection failed" | The managed identity needs a few minutes to propagate after deployment |
+| Container app shows 0 replicas | Check logs: `az containerapp logs show --name <app> --resource-group <rg>` |
 
-### 9.2 Configure authentication
+### Frontend shows no data
 
-Set up **workload identity federation** (OIDC) for GitHub Actions → Azure. This avoids storing Azure credentials as GitHub secrets.
+- The Data Generator needs time to seed (500 customers + 10,000 orders). Check its logs.
+- Make sure the Orders API is running — check its health endpoint or logs.
+- The Frontend connects to the API via the `API_BASE_URL` environment variable. Verify it's set correctly in the container app configuration.
 
-1. Create an App Registration in Entra ID
-2. Add a federated credential for your GitHub repo/branch
-3. Grant the service principal the necessary roles (ACR push, ACA contributor)
-4. Configure the GitHub Actions workflow to use `azure/login` with OIDC
+---
 
-### 9.3 Handle private ACR
+## Next Steps
 
-Since ACR has public access disabled, either:
-- Use `az acr build` (runs inside ACR, no network access needed from the runner)
-- Use a **self-hosted GitHub runner** deployed in the VNet
+Once everything is running, try:
 
-### 9.4 Optional: Approval gate
-
-Add a manual approval step using GitHub Environments for production deployments.
+1. **Create an order manually** — Use the "New Order" page in the Frontend
+2. **Explore the API** — The Orders API has OpenAPI/Swagger in development mode
+3. **Check the infrastructure** — Browse the Azure Portal to see all the resources that were created
+4. **Set up CI/CD** — See `.github/workflows/build-deploy.yml` for a GitHub Actions pipeline that auto-deploys on push to `main`
+5. **Connect Power BI** — Use Microsoft Fabric to mirror the Azure SQL database and build analytics dashboards

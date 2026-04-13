@@ -1,6 +1,6 @@
 # Azure Container Apps Retail Example — Step-by-Step Instructions
 
-Welcome! This guide walks you through running the Miyazaki Retail application — first on your own machine, then deployed to Azure. No prior experience with containers is needed.
+Welcome! This guide walks you through running a retail demo application — first on your own machine, then deployed to Azure. No prior experience with containers is needed.
 
 > **What you'll build:** A multi-service retail app with a web dashboard, a REST API, a fake-data generator, and an inventory tracker — all running in containers.
 

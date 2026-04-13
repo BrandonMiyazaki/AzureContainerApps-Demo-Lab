@@ -17,7 +17,17 @@ git clone https://github.com/<your-username>/AzureContainerApps-Retail-Example.g
 cd AzureContainerApps-Retail-Example
 ```
 
-## Step 2: Create your environment file
+## Step 2: Name your store
+
+Open `src/Frontend/appsettings.json` and change the `StoreName` to whatever you want:
+
+```json
+"StoreName": "Contoso Retail"
+```
+
+This name appears in the browser tab titles and the sidebar. The default is "Miyazaki Retail".
+
+## Step 3: Create your environment file
 
 The app needs a SQL Server password. We provide a template — you just need to copy it:
 
@@ -42,13 +52,13 @@ You can leave the default or change it. The password must meet [SQL Server compl
 
 > **Important:** The `.env` file is git-ignored — it will **never** be committed to your repo. This is intentional for security.
 
-## Step 3: Make sure Docker Desktop is running
+## Step 4: Make sure Docker Desktop is running
 
 Look for the Docker whale icon in your system tray (Windows) or menu bar (Mac). If it's not there, open Docker Desktop and wait for it to say "Docker is running."
 
 > **First time?** Docker Desktop may take a minute to start. On Windows, it may ask you to enable WSL 2 — follow the prompts.
 
-## Step 4: Start everything
+## Step 5: Start everything
 
 From the repo root folder, run:
 
@@ -72,7 +82,7 @@ You'll see logs scrolling from all services. Look for:
 - `Data Generator starting` — fake data generation is running
 - `Inventory Service starting` — stock tracking is active
 
-## Step 5: Open the app
+## Step 6: Open the app
 
 Open your browser and go to: **http://localhost:8080**
 
@@ -85,7 +95,7 @@ You should see the retail dashboard with:
 
 > **Not loading?** Wait 30 seconds — the Data Generator needs time to create initial data. Refresh the page.
 
-## Step 6: Stop everything
+## Step 7: Stop everything
 
 Press `Ctrl+C` in the terminal where Docker Compose is running. Then clean up:
 

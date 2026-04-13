@@ -1,6 +1,6 @@
 ﻿<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">Miyazaki Retail</a>
+        <a class="navbar-brand" href="">@StoreName</a>
     </div>
 </div>
 
@@ -40,3 +40,7 @@
     </nav>
 </div>
 
+@code {
+    [CascadingParameter(Name = "StoreName")]
+    public string StoreName { get; set; } = "Retail Demo";
+}

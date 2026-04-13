@@ -3,7 +3,7 @@
 @inject OrdersApiClient Api
 @rendermode InteractiveServer
 
-<PageTitle>Customers — Miyazaki Retail</PageTitle>
+<PageTitle>Customers — @StoreName</PageTitle>
 
 <h1>Customers</h1>
 
@@ -102,6 +102,9 @@ else
 }
 
 @code {
+    [CascadingParameter(Name = "StoreName")]
+    public string StoreName { get; set; } = "Retail Demo";
+
     private bool _loading = true;
     private string? _error;
     private List<Frontend.Models.Customer> _customers = [];

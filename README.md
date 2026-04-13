@@ -1,4 +1,4 @@
-# Miyazaki Retail — Azure Container Apps Retail Example
+# Azure Container Apps Retail Example
 
 > **Disclaimer:** This repository is provided as-is for learning purposes and is not actively maintained. Dependencies, Azure services, and APIs may change over time. Use at your own discretion.
 

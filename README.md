@@ -111,7 +111,7 @@ flowchart LR
    - `AZURE_RESOURCE_GROUP` — Target resource group name
    - `ACR_NAME` — Azure Container Registry name (without `.azurecr.io`)
 
-Follow the [Lab Instructions](instructions.md) for the full step-by-step walkthrough.
+Follow the [Instructions](instructions.md) for the full step-by-step walkthrough.
 
 ## License
 

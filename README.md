@@ -1,8 +1,8 @@
-# Miyazaki Retail — Azure Container Apps Data Generator
+# Miyazaki Retail — Azure Container Apps Retail Example
 
 > **Disclaimer:** This repository is provided as-is for learning purposes and is not actively maintained. Dependencies, Azure services, and APIs may change over time. Use at your own discretion.
 
-A hands-on lab for building and deploying a multi-service retail application on **Azure Container Apps**, with a fully private, production-grade architecture.
+A hands-on lab for building and deploying a multi-service retail application on **Azure Container Apps**, with a fully private, architecture design.
 
 ## Architecture
 

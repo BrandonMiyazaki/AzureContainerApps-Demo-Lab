@@ -7,54 +7,42 @@ A hands-on lab for building and deploying a multi-service retail application on 
 ## Architecture
 
 ```mermaid
-graph TB
-    subgraph Internet
-        Browser["🌐 Browser"]
+flowchart LR
+    Browser(("🌐 Browser"))
+
+    subgraph ACA["Container Apps Environment"]
+        direction TB
+        Frontend["**Blazor Frontend**\nexternal ingress"]
+        API["**Orders API**\ninternal ingress"]
+        DG["**Data Generator**\nworker · no ingress"]
+        IS["**Inventory Service**\nworker · no ingress"]
     end
 
-    subgraph Azure["Azure Resource Group"]
-        subgraph VNet["VNet (10.31.0.0/16)"]
-            subgraph ACA["snet-aca (10.31.0.0/23) — Container Apps Environment"]
-                Frontend["Blazor Frontend\n(external ingress)"]
-                API["Orders API\n(internal ingress)"]
-                DG["Data Generator\n(no ingress)"]
-                IS["Inventory Service\n(no ingress)"]
-            end
-
-            subgraph PE["snet-private-endpoints (10.31.2.0/24)"]
-                SQL_PE["SQL Private\nEndpoint"]
-                ACR_PE["ACR Private\nEndpoint"]
-                KV_PE["Key Vault Private\nEndpoint"]
-            end
-        end
-
-        SQL[("Azure SQL\nDatabase")]
-        ACR["Azure Container\nRegistry"]
-        KV["Azure Key Vault"]
-        MI["Managed Identity\n(Entra ID)"]
-        LA["Log Analytics"]
+    subgraph Backend["Private Endpoints"]
+        direction TB
+        SQL[("**Azure SQL**")]
+        ACR["**ACR**"]
+        KV["**Key Vault**"]
     end
 
-    Browser -->|HTTPS| Frontend
-    Frontend -->|HTTP internal| API
-    DG -->|HTTP internal| API
-    IS -->|HTTP internal| API
-    API --> SQL_PE --> SQL
-    ACA -.->|image pull| ACR_PE --> ACR
-    ACA -.->|secrets| KV_PE --> KV
-    MI -.->|auth| SQL
-    MI -.->|auth| ACR
-    MI -.->|auth| KV
-    LA -.->|diagnostics| SQL
-    LA -.->|diagnostics| KV
+    Browser -- HTTPS --> Frontend
+    Frontend -- internal --> API
+    DG -- internal --> API
+    IS -- internal --> API
+    API -- private link --> SQL
+    ACA -. image pull .-> ACR
+    ACA -. secrets .-> KV
 
-    style Internet fill:#e1f5fe,stroke:#0288d1
-    style VNet fill:#e8f5e9,stroke:#388e3c
-    style ACA fill:#fff3e0,stroke:#f57c00
-    style PE fill:#fce4ec,stroke:#c62828
-    style SQL fill:#e8eaf6,stroke:#3f51b5
-    style ACR fill:#e8eaf6,stroke:#3f51b5
-    style KV fill:#e8eaf6,stroke:#3f51b5
+    style Browser fill:#fff,stroke:#333,color:#333
+    style ACA fill:#fff8e1,stroke:#ff8f00,color:#333
+    style Backend fill:#e3f2fd,stroke:#1565c0,color:#333
+    style Frontend fill:#c8e6c9,stroke:#2e7d32,color:#000
+    style API fill:#c8e6c9,stroke:#2e7d32,color:#000
+    style DG fill:#e0e0e0,stroke:#616161,color:#000
+    style IS fill:#e0e0e0,stroke:#616161,color:#000
+    style SQL fill:#bbdefb,stroke:#1565c0,color:#000
+    style ACR fill:#bbdefb,stroke:#1565c0,color:#000
+    style KV fill:#bbdefb,stroke:#1565c0,color:#000
 ```
 
 ## Services

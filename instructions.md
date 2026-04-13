@@ -1,4 +1,4 @@
-# Azure Container Apps Demo Lab — Step-by-Step Instructions
+# Azure Container Apps Retail Example — Step-by-Step Instructions
 
 Welcome! This guide walks you through running the Miyazaki Retail application — first on your own machine, then deployed to Azure. No prior experience with containers is needed. We'll explain every step.
 

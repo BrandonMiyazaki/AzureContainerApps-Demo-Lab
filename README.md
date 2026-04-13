@@ -69,11 +69,11 @@ flowchart LR
 │   ├── DataGenerator/      # .NET Worker Service
 │   └── InventoryService/   # .NET Worker Service
 ├── infra/                  # Bicep modules for Azure infrastructure
+├── docs/                   # Step-by-step lab guides
 ├── .github/
 │   └── workflows/          # CI/CD pipelines
 ├── docker-compose.yml      # Local development
-├── plan.md                 # Lab plan and design decisions
-├── instructions.md         # Step-by-step lab instructions
+├── instructions.md         # Lab instructions index
 └── README.md
 ```
 

@@ -10,12 +10,6 @@ param privateEndpointsSubnetId string
 @description('SQL private DNS zone ID')
 param sqlDnsZoneId string
 
-@description('Principal ID of the managed identity for Entra admin')
-param managedIdentityPrincipalId string
-
-@description('Name of the managed identity for Entra admin')
-param managedIdentityName string
-
 @description('Object ID of the deploying user (Entra admin for SQL Server)')
 param sqlAdminObjectId string
 

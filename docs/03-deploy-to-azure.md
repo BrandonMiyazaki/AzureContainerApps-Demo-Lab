@@ -209,10 +209,11 @@ az sql db execute \
     END;
     ALTER ROLE db_datareader ADD MEMBER [$IDENTITY_NAME];
     ALTER ROLE db_datawriter ADD MEMBER [$IDENTITY_NAME];
+    ALTER ROLE db_ddladmin ADD MEMBER [$IDENTITY_NAME];
   "
 ```
 
-> **What this does:** Creates a database user for the managed identity and grants it `db_datareader` (SELECT) and `db_datawriter` (INSERT, UPDATE, DELETE) permissions. The container apps use this identity to authenticate to SQL — no passwords needed.
+> **What this does:** Creates a database user for the managed identity and grants it `db_datareader` (SELECT), `db_datawriter` (INSERT, UPDATE, DELETE), and `db_ddladmin` (CREATE/ALTER TABLE — needed for EF Core migrations on startup). The container apps use this identity to authenticate to SQL — no passwords needed.
 
 Finally, lock down SQL Server public access again:
 
@@ -240,6 +241,14 @@ az deployment group show \
 Open the URL in your browser (add `https://` in front). You should see the same retail dashboard, now running in Azure!
 
 > **Give it a minute.** The Data Generator runs a bulk seed on first startup — it creates 500 customers and 10,000 orders with dates spanning 10 years. This takes a few minutes to complete.
+
+> **Stop the Data Generator when you're done seeding.** After the initial data is created, the Data Generator continues running and creates new customers and orders every 30 seconds. To stop it, scale it to zero replicas:
+>
+> ```bash
+> az containerapp update --name ca-data-generator --resource-group rg-retail-demo --min-replicas 0 --max-replicas 0
+> ```
+>
+> To start it again later, set `--min-replicas 1 --max-replicas 1`.
 
 ## Step 10: Verify everything is running
 

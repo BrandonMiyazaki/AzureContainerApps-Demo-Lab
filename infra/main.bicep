@@ -69,8 +69,6 @@ module sql 'modules/sql.bicep' = {
     baseName: baseName
     privateEndpointsSubnetId: networking.outputs.privateEndpointsSubnetId
     sqlDnsZoneId: networking.outputs.sqlDnsZoneId
-    managedIdentityPrincipalId: identity.outputs.identityPrincipalId
-    managedIdentityName: identity.outputs.identityName
     sqlAdminObjectId: sqlAdminObjectId
     sqlAdminLogin: sqlAdminLogin
     logAnalyticsWorkspaceId: logAnalyticsAca.outputs.logAnalyticsWorkspaceId

@@ -68,6 +68,7 @@ Desktop.ini
 # Secrets / Environment
 # =========================
 appsettings.Production.json
+appsettings.Development.json
 .env
 *.pfx
 *.key
